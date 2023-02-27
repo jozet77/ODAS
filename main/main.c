@@ -15,8 +15,25 @@ typedef struct{
   uint8_t Channel;
   uint8_t TxAddr[6];
   int8_t RSSI;
-  uint8_t SSID[128]
+  uint8_t SSID[32]
 }wifi_rx_packet_t;
+
+void printPacket(wifi_rx_packet_t msg)
+{
+  printf("Type: %x, SubType: %x, Channel: %x, RSSI: %d\n",msg.FrameType, msg.FrameSubType, msg.Channel, msg.RSSI);
+  printf("txAddr:");
+  for(uint8_t i=0; i<6; i++)
+  {
+    printf("%02x",msg.TxAddr[i]);
+  }
+  printf(" SSID:");
+  for(uint8_t i=0; i<32; i++)
+  {
+    //printf("%02x",msg.SSID[i]);
+    printf("%c",);
+  }
+  printf("\n");
+}
 
 esp_err_t event_handler(void *ctx, system_event_t *event)
 {
@@ -25,17 +42,41 @@ esp_err_t event_handler(void *ctx, system_event_t *event)
 
 void wifi_promiscuous_callback(void *buf, wifi_promiscuous_pkt_type_t type)
 {
-  wifi_rx_packet_t *rxPacket;
+  uint8_t lenSSID = 0;
+  wifi_rx_packet_t rxPacket;
+  for(uint8_t i=0; i<32; i++)
+  {
+    rxPacket.SSID[i] = 0x0;
+  }
   wifi_promiscuous_pkt_t *rxBuffer = (wifi_promiscuous_pkt_t *)buf;
   if (type == WIFI_PKT_MGMT)
   {
-    printf("Length: %d\n", rxBuffer->rx_ctrl.sig_len);
-    for (uint16_t i = 0; i < rxBuffer->rx_ctrl.sig_len; i++)
+    rxPacket.FrameType = (rxBuffer->payload[0] & 0xC) >> 2;
+    rxPacket.FrameSubType = rxBuffer->payload[0] >> 4;
+    rxPacket.Channel = rxBuffer->rx_ctrl.channel;
+    rxPacket.RSSI = rxBuffer->rx_ctrl.rssi;
+    for(uint8_t i=0; i<6; i++)
     {
-      printf("%02x", rxBuffer->payload[i]);
-      //printf("Data %d : %x\n",i , (rxBuffer->payload[i]));
+      rxPacket.TxAddr[i] = rxBuffer->payload[i+11];
     }
-    printf("\r\n\n");
+    lenSSID = rxBuffer->payload[37]; // SSID length is in location 37 in the payload
+    for(uint8_t i=0; i<lenSSID; i++) // SSID can have a max of 32 octets
+    {
+      rxPacket.SSID[i] = rxBuffer->payload[i+38];
+    }
+    if(rxPacket.FrameSubType == 0x5)
+    {
+      printf("Length: %d\n", rxBuffer->rx_ctrl.sig_len);
+      printPacket(rxPacket);
+      /*
+      for (uint16_t i = 0; i < rxBuffer->rx_ctrl.sig_len; i++)
+      {
+        printf("%02x", rxBuffer->payload[i]);
+        //printf("Data %d : %x\n",i , (rxBuffer->payload[i]));
+      }
+      */
+      printf("\r\n");
+    }
   }
 }
 
