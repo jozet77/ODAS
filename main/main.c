@@ -36,6 +36,7 @@ void printPacket(wifi_rx_packet_t msg)
     printf("%c",);
   }
   printf("\n");
+
 }
 
 esp_err_t event_handler(void *ctx, system_event_t *event)
@@ -85,6 +86,7 @@ void wifi_promiscuous_callback(void *buf, wifi_promiscuous_pkt_type_t type)
 
 void app_main(void)
 {
+  init();
   nvs_flash_init();
   tcpip_adapter_init();
   ESP_ERROR_CHECK(esp_event_loop_init(event_handler, NULL));
