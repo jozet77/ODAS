@@ -8,6 +8,9 @@
 #include "esp_system.h"
 #include "esp_event.h"
 #include "driver/gpio.h"
+#include "driver/uart.h"
+#include "string.h"
+
 
 typedef struct{
   uint8_t FrameType;
