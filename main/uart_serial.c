@@ -12,13 +12,13 @@ static const int RX_BUF_SIZE = 1024;
 #define RXD_PIN 17
 
 void init(void) {
-    const uart_config_t uart_config = {
-        .baud_rate = 115200,
-        .data_bits = UART_DATA_8_BITS,
-        .parity = UART_PARITY_DISABLE,
-        .stop_bits = UART_STOP_BITS_1,
-        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE
-    };
+const uart_config_t uart_config = {
+    .baud_rate = 115200,
+    .data_bits = UART_DATA_8_BITS,
+    .parity = UART_PARITY_DISABLE,
+    .stop_bits = UART_STOP_BITS_1,
+    .flow_ctrl = UART_HW_FLOWCTRL_DISABLE
+};
     // We won't use a buffer for sending data.
     uart_driver_install(UART_NUM_1, RX_BUF_SIZE, 0, 0, NULL, 0);
     uart_param_config(UART_NUM_1, &uart_config);
@@ -61,9 +61,11 @@ static void rx_task(void *arg)
     free(data);
 }
 
+/*
 void app_main(void)
 {
     init();
     xTaskCreate(rx_task, "uart_rx_task", 1024*2, NULL, configMAX_PRIORITIES, NULL);
     xTaskCreate(tx_task, "uart_tx_task", 1024*2, NULL, configMAX_PRIORITIES-1, NULL);
 }
+*/
