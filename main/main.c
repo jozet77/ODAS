@@ -58,18 +58,14 @@ esp_err_t event_handler(void *ctx, system_event_t *event)
   return ESP_OK;
 }
 
-static void sleep_ms(uint8_t time)
-{
-  vTaskDelay(time / portTICK_PERIOD_MS);
-}
-
 //### TX UART function ###
 static void sendData(const char* data)
 {
-    const int len = strlen(data);
-    const int txBytes = uart_write_bytes(UART_NUM_1, data, len);
-    sleep_ms(1000);
-    ESP_LOGI("UART TX", "Wrote %d bytes", txBytes);
+    //uart_flush_input(UART_NUM_1);
+    const uint8_t len = strlen(data);
+    const uint8_t txBytes = uart_write_bytes(UART_NUM_1, data, len);
+    printf("Sent: %s", data);
+    //ESP_LOGI("UART TX", "Wrote %d bytes", txBytes);
 }
 
 //### RX UART function ###
@@ -83,7 +79,6 @@ static void rx_task(void *arg)
         if (rxBytes > 0) {
             data[rxBytes] = 0;
             printf("\nReceived: %s\n",data);
-            uart_flush_input(UART_NUM_1);
             //ESP_LOGI(RX_TASK_TAG, "Read %d bytes: '%s'", rxBytes, data);
             //ESP_LOG_BUFFER_HEXDUMP(RX_TASK_TAG, data, rxBytes, ESP_LOG_INFO);
         }
@@ -125,8 +120,8 @@ void wifi_promiscuous_callback(void *buf, wifi_promiscuous_pkt_type_t type)
     //---> Here is where an MQTT update must happen
     if(rxPacket.FrameSubType == 0x5)
     {
-      printPacket(rxPacket, rxBuffer->rx_ctrl.sig_len);
-      sendData("AT\r");
+      //printPacket(rxPacket, rxBuffer->rx_ctrl.sig_len);
+      //sendData("AT\r");
       /*
       for (uint16_t i = 0; i < rxBuffer->rx_ctrl.sig_len; i++)
       {
@@ -134,7 +129,6 @@ void wifi_promiscuous_callback(void *buf, wifi_promiscuous_pkt_type_t type)
         //printf("Data %d : %x\n",i , (rxBuffer->payload[i]));
       }
       */
-      printf("\r\n");
     }
   }
 }
@@ -143,12 +137,14 @@ void wifi_promiscuous_callback(void *buf, wifi_promiscuous_pkt_type_t type)
 static void blink(void *arg)
 {
   gpio_set_direction(GPIO_NUM_2, GPIO_MODE_OUTPUT);
-  int level = 0;
+  uint8_t level = 0;
+  esp_log_level_set("UART TX", ESP_LOG_INFO);
   while (1)
   {
     gpio_set_level(GPIO_NUM_2, level);
     level = !level;
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    sendData("AT\r");
+    vTaskDelay(2000 / portTICK_PERIOD_MS);
   }
 }
 
@@ -163,7 +159,6 @@ void app_main(void)
   ESP_ERROR_CHECK(esp_wifi_set_promiscuous_rx_cb(wifi_promiscuous_callback));
   ESP_ERROR_CHECK(esp_wifi_set_promiscuous_filter(&filter));
   ESP_ERROR_CHECK(esp_wifi_set_promiscuous(true));
-
   const uart_config_t uart_config = {
       .baud_rate = 115200,
       .data_bits = UART_DATA_8_BITS,
@@ -181,5 +176,5 @@ void app_main(void)
   }
   
   xTaskCreate(rx_task, "uart_rx_task", 1024*2, NULL, configMAX_PRIORITIES, NULL);
-  xTaskCreate(blink, "blink_task", 1024, NULL, configMAX_PRIORITIES - 1, NULL);
+  xTaskCreate(blink, "blink_task", 1024, NULL, configMAX_PRIORITIES-1, NULL);
 }
