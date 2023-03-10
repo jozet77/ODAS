@@ -15,6 +15,7 @@
 //---------- CODE DEFINITIONS ---------------
 
 static const int RX_BUF_SIZE = 1024;
+static uint8_t gprs_state = 0;
 
 #define TXD_PIN 16 //UART TX PIN
 #define RXD_PIN 17 //UART RX PIN 
@@ -68,6 +69,49 @@ static void sendData(const char* data)
     //ESP_LOGI("UART TX", "Wrote %d bytes", txBytes);
 }
 
+//### Function to handle the AT commands State Machine ###
+void gprs_validation(char* data)
+{
+  if(strchr((char*) data,'K'))
+  {
+    switch (gprs_state)
+    {
+      case 0:
+        gprs_state = 1;
+        sendData("AT\r");
+      break;
+      case 1:
+        sendData("AT+CPIN?\r");
+        gprs_state = 2;
+      break;
+      case 2:
+        sendData("AT+CGREG?\r");
+        gprs_state = 3;
+      break;
+      case 3:
+        sendData("AT+COPS?\r");
+        gprs_state = 0;
+      break;
+      case 4:
+        sendData('AT+CIPCSGP=1,"internet.movistar.com.ec"."movistar","movistar"\r');
+        gprs_state = 5;
+      break;
+      case 5:
+        sendData('AT+CIPSTART=”TCP”,”google.com.vn”,”80”\r');
+        gprs_state = 6;
+      break;
+      case 6:
+        sendData('AT+CIPSEND\r');
+        gprs_state = 0;
+      break;
+    }
+  }
+  else
+  {
+    gprs_state = 0;
+  }
+}
+
 //### RX UART function ###
 static void rx_task(void *arg)
 {
@@ -79,6 +123,7 @@ static void rx_task(void *arg)
         if (rxBytes > 0) {
             data[rxBytes] = 0;
             printf("\nReceived: %s\n",data);
+            gprs_validation((char*) data);
             //ESP_LOGI(RX_TASK_TAG, "Read %d bytes: '%s'", rxBytes, data);
             //ESP_LOG_BUFFER_HEXDUMP(RX_TASK_TAG, data, rxBytes, ESP_LOG_INFO);
         }
@@ -143,7 +188,7 @@ static void blink(void *arg)
   {
     gpio_set_level(GPIO_NUM_2, level);
     level = !level;
-    sendData("AT\r");
+    //sendData("AT+COPS?\r");
     vTaskDelay(2000 / portTICK_PERIOD_MS);
   }
 }
@@ -177,4 +222,6 @@ void app_main(void)
   
   xTaskCreate(rx_task, "uart_rx_task", 1024*2, NULL, configMAX_PRIORITIES, NULL);
   xTaskCreate(blink, "blink_task", 1024, NULL, configMAX_PRIORITIES-1, NULL);
+
+  gprs_validation("OK");
 }
