@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/queue.h"
 #include "esp_event_loop.h"
 #include "esp_wifi.h"
 #include "esp_log.h"
@@ -11,6 +12,9 @@
 #include "driver/gpio.h"
 #include "driver/uart.h"
 #include "string.h"
+
+//---------- QUEUE FOR DATA TO BE SENT VIA GRPS ---------------
+QueueHandle_t queue; // Queue handler
 
 //---------- CODE DEFINITIONS ---------------
 
@@ -27,18 +31,18 @@ typedef struct{
   uint8_t Channel;
   uint8_t TxAddr[6];
   int8_t RSSI;
-  uint8_t SSID[32]
+  uint8_t lenSSID;
+  uint8_t SSID[32];
 }wifi_rx_packet_t;
 
 //---------- CODE HELP FUNCTIONS ---------------
 
 //Function that will pront a received package
 //for TB only
-void printPacket(wifi_rx_packet_t msg, uint16_t len)
+void printPacket(wifi_rx_packet_t msg)
 {
   ESP_LOGI("wifi", "Type: %x, SubType: %x, Channel: %x, RSSI: %d",msg.FrameType, msg.FrameSubType, msg.Channel, msg.RSSI);
   /*
-  printf("Length: %d\n", len);
   printf("Type: %x, SubType: %x, Channel: %x, RSSI: %d\n",msg.FrameType, msg.FrameSubType, msg.Channel, msg.RSSI);
   printf("txAddr:");
   for(uint8_t i=0; i<6; i++)
@@ -134,7 +138,7 @@ static void rx_task(void *arg)
 //### Function to handle when a new promiscuous package arrives ###
 void wifi_promiscuous_callback(void *buf, wifi_promiscuous_pkt_type_t type)
 {
-  uint8_t lenSSID = 0;
+  uint8_t ssid_length = 0;
   wifi_rx_packet_t rxPacket;
   wifi_promiscuous_pkt_t *rxBuffer = (wifi_promiscuous_pkt_t *)buf;
 
@@ -156,8 +160,9 @@ void wifi_promiscuous_callback(void *buf, wifi_promiscuous_pkt_type_t type)
     {
       rxPacket.TxAddr[i] = rxBuffer->payload[i+11];
     }
-    lenSSID = rxBuffer->payload[37]; // SSID length is in location 37 in the payload
-    for(uint8_t i=0; i<lenSSID; i++) // SSID can have a max of 32 octets
+    ssid_length = rxBuffer->payload[37]; // SSID length is in location 37 in the payload
+    rxPacket.lenSSID = ssid_length;
+    for(uint8_t i=0; i<ssid_length; i++) // SSID can have a max of 32 octets
     {
       rxPacket.SSID[i] = rxBuffer->payload[i+38];
     }
@@ -165,9 +170,17 @@ void wifi_promiscuous_callback(void *buf, wifi_promiscuous_pkt_type_t type)
     //---> Here is where an MQTT update must happen
     if(rxPacket.FrameSubType == 0x5)
     {
-      //printPacket(rxPacket, rxBuffer->rx_ctrl.sig_len);
+      //printPacket(rxPacket);
       //sendData("AT\r");
-      /*
+      if (xQueueSend(queue, &rxPacket, 1000 / portTICK_PERIOD_MS)) // Added new data to queue
+      {
+        printf("added message to queue\n");
+      }
+      else
+      {
+        printf("failed to add message to queue\n");
+      }
+      /* p
       for (uint16_t i = 0; i < rxBuffer->rx_ctrl.sig_len; i++)
       {
         printf("%02x", rxBuffer->payload[i]);
@@ -181,21 +194,34 @@ void wifi_promiscuous_callback(void *buf, wifi_promiscuous_pkt_type_t type)
 //### LED blink function ###
 static void blink(void *arg)
 {
+  // Blinky LED
   gpio_set_direction(GPIO_NUM_2, GPIO_MODE_OUTPUT);
   uint8_t level = 0;
   esp_log_level_set("UART TX", ESP_LOG_INFO);
+  
+  wifi_rx_packet_t rxPacket;
+
   while (1)
   {
     gpio_set_level(GPIO_NUM_2, level);
     level = !level;
     //sendData("AT+COPS?\r");
-    vTaskDelay(2000 / portTICK_PERIOD_MS);
+
+    // Queue receiver
+    if (xQueueReceive(queue, &rxPacket, 5000 / portTICK_PERIOD_MS))
+    {
+      printPacket(rxPacket);
+    }
+    vTaskDelay(500 / portTICK_PERIOD_MS);
   }
 }
 
 void app_main(void)
 {
+  //Initiate FLASH memory
   nvs_flash_init();
+
+  //Initiate modules for WiFi handling
   tcpip_adapter_init();
   ESP_ERROR_CHECK(esp_event_loop_init(event_handler, NULL));
   wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
@@ -204,6 +230,8 @@ void app_main(void)
   ESP_ERROR_CHECK(esp_wifi_set_promiscuous_rx_cb(wifi_promiscuous_callback));
   ESP_ERROR_CHECK(esp_wifi_set_promiscuous_filter(&filter));
   ESP_ERROR_CHECK(esp_wifi_set_promiscuous(true));
+
+  //Initiate UART configurations
   const uart_config_t uart_config = {
       .baud_rate = 115200,
       .data_bits = UART_DATA_8_BITS,
@@ -220,8 +248,13 @@ void app_main(void)
     printf(" wifi channel : 1\r\n");
   }
   
+  //Create queue for data to be sent via GPRS
+  queue = xQueueCreate(15, sizeof(wifi_rx_packet_t));
+
+  //Create task for main functionallity
   xTaskCreate(rx_task, "uart_rx_task", 1024*2, NULL, configMAX_PRIORITIES, NULL);
   xTaskCreate(blink, "blink_task", 1024, NULL, configMAX_PRIORITIES-1, NULL);
 
+  //Start GPRS state machine
   gprs_validation("OK");
 }
