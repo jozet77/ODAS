@@ -79,44 +79,44 @@ void gprs_validation(char* data)
   if(strchr((char*) data,'K'))
   {
     switch (gprs_state)
-    {
-      case 0:
-        gprs_state = 1;
-        sendData("AT\r"); // check connection is ok
-      break;
-      case 1:
-        sendData("AT+CPIN?\r"); // check sim card is in
-        gprs_state = 2;
-      break;
-      case 2:
-        sendData("AT+CGREG?\r"); // check is connected to network
-        gprs_state = 3;
-      break;
-      case 3:
-        sendData("AT+COPS?\r"); // check the network the device is connected to
-        gprs_state = 4;
-      break;
-      case 4:
-        sendData("AT+CGATT=1\r"); // perform GPRS attach
-        gprs_state = 5;
-      break;
-      case 5:
-        sendData("AT+CGPADDR=1\r"); // check IP address
-        gprs_state = 0;
-      break;
-      case 6:
-        sendData('AT+CIPCSGP=1,"internet.movistar.com.ec"."movistar","movistar"\r');
-        // set APN
-        gprs_state = 7;
-      break;
-      case 7:
-        sendData('AT+CIPSTART="TCP","google.com.vn","80"\r'); // set destination URL
-        gprs_state = 8;
-      break;
-      case 8:
-        sendData('AT+CIPSEND\r'); // send Data
-        gprs_state = 0;
-      break;
+      {
+        case 0:
+          gprs_state = 1;
+          sendData("AT\r"); // check connection is ok
+        break;
+        case 1:
+          sendData("AT+CPIN?\r"); // check sim card is in
+          gprs_state = 2;
+        break;
+        case 2:
+          sendData("AT+CGREG?\r"); // check is connected to network
+          gprs_state = 3;
+        break;
+        case 3:
+          sendData("AT+COPS?\r"); // check the network the device is connected to
+          gprs_state = 4;
+        break;
+        case 4:
+          sendData("AT+CGATT=1\r"); // perform GPRS attach
+          gprs_state = 5;
+        break;
+        case 5:
+          sendData("AT+CGPADDR=1\r"); // check IP address
+          gprs_state = 0;
+        break;
+        case 6:
+          sendData('AT+CIPCSGP=1,"internet.movistar.com.ec"."movistar","movistar"\r');
+          // set APN
+          gprs_state = 7;
+        break;
+        case 7:
+          sendData('AT+CIPSTART="TCP","google.com.vn","80"\r'); // set destination URL
+          gprs_state = 8;
+        break;
+        case 8:
+          sendData('AT+CIPSEND\r'); // send Data
+          gprs_state = 0;
+        break;
     }
   }
   else
@@ -262,7 +262,8 @@ void app_main(void)
   queue = xQueueCreate(15, sizeof(wifi_rx_packet_t));
 
   //Create task for main functionallity
-  xTaskCreate(rx_task, "uart_rx_task", 1024*2, NULL, configMAX_PRIORITIES, NULL);
+  
+  //xTaskCreate(rx_task, "uart_rx_task", 1024*2, NULL, configMAX_PRIORITIES, NULL);
   xTaskCreate(blink, "blink_task", 1024, NULL, configMAX_PRIORITIES-1, NULL);
 
   //Start GPRS state machine
